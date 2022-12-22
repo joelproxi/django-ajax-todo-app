@@ -1,0 +1,9 @@
+ 
+{% for task in  tasks %}
+    <li data-id="{{ task.id }}"  data-description="{{ task.description }}">{{ task.description }} 
+        <span>
+            <button id="edit">edit</button>  
+            <button id="delete">x</button>
+        </span>
+    </li>
+{% endfor %}

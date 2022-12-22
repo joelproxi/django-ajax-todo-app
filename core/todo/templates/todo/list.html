@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Django ajax todo app</title>
+</head>
+<body>
+    
+    <h2>Liste des taches </h2>
+    <hr>
+    <br>
+    <form >
+        <input type="text" id="task" value="">
+        <button type="submit" id="btn-send">Ajouter</button>
+        {% csrf_token %}
+    </form>
+    <ul>
+       {% include "todo/ajax_task_list.html" %}
+    </ul>
+
+
+
+    <script>
+
+        class ServiceTaskAPI {
+
+            constructor(csrftoken){
+                this.csrftoken = csrftoken;
+            }
+
+            apiClient = async (url, params = {}) => {
+                if(params.body instanceof FormData){
+                    params.body = Object.fromEntries(params.body)
+                }
+
+                if(params.body && typeof params.body == 'object'){
+                    params.body = JSON.stringify(params.body)
+                }
+
+                params = {
+                    headers : {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': this.csrftoken, 
+                    },
+                    mode: 'same-origin',
+                    ...params
+                }
+                const resp = await fetch(url, params);
+                if (resp.ok){
+                    return resp
+                }
+                throw new Error("Le serveur est indisponile");
+            }
+
+            get_task = (route) => {
+                return this.apiClient(route, {
+                    method: 'GET'
+                });
+            }
+
+            add_task = (route, data) => {
+                return this.apiClient(route, {
+                    method: 'POST',
+                    body: data
+                })
+            }
+
+            update_task = (route, data) => {
+                return this.apiClient(route, {
+                    method: 'PUT',
+                    body: data
+                })
+            }
+
+            delete_task(route, data){
+                return this.apiClient(route, {
+                    method: 'DELETE',
+                    body: data
+                })
+            }
+        }
+
+
+        function getCookie(name) {
+            const cookies = document.cookie.split(';')
+            
+            for(cookie of cookies){
+                console.log(cookie)
+                const [key, value] = cookie.split('=');
+                if(key == name) return value;
+            }
+            return null;
+        }
+
+
+        window.addEventListener('DOMContentLoaded', (e) => {
+            const form = document.querySelector('form');
+            const csrftoken = getCookie('csrftoken')
+            let apiClient = new ServiceTaskAPI(csrftoken);
+            let activeTask = null;
+            getTask().then(resp => resp)
+
+            function submitForm(){
+                form.addEventListener('submit', async (event) => {
+                    event.preventDefault();
+                    let inputValue = document.querySelector('#task').value;
+                    if( inputValue && inputValue.trim() != "" ){
+                        const body = {
+                            "id": activeTask?.id,
+                            "des": inputValue,
+                            "com": false
+                        }
+                        console.log(body)
+                        console.log(activeTask)
+                        
+                        if(activeTask == null){
+                            const resp = await apiClient.add_task('{% url "add" %}', body);
+                            const data = await resp.json();
+                            await getTask()
+                        }else{
+                           
+                            const resp = await apiClient.update_task( '{% url "add" %}',  body);
+                            const data = await resp.json();
+                            activeTask = null;
+                            await getTask()
+                            
+                        }
+                        
+                        document.querySelector('#task').value = ""
+                    }
+                    
+                })
+            }
+
+            async function getTask(){
+                const resp = await apiClient.get_task('{% url "list" %}');
+                const data = await resp.text();
+                console.log(data)
+                document.querySelector('ul').innerHTML = data;
+                setActiveTask()
+                deleteTask()
+            }
+
+            function deleteTask(){
+                let AllLiTask = document.querySelectorAll("li");
+                AllLiTask.forEach( liTask => {
+                    liTask.querySelector("#delete").addEventListener('click', async function(e){
+                        const li = this.parentNode.parentNode;
+                        let task = {
+                            "id": li.dataset.id
+                        }
+                        const resp = await apiClient.delete_task('{% url "add" %}', task);
+                        const data = await resp.json();
+                        await getTask()
+                    })
+                })
+            }
+
+            function setActiveTask(){
+                let AllLiTask = document.querySelectorAll("li");
+                AllLiTask.forEach( liTask => {
+                    liTask.querySelector("#edit").addEventListener('click', function(e){
+                        const li = this.parentNode.parentNode;
+                        activeTask = {
+                            "id": li.dataset.id,
+                            "description": li.dataset.description,
+                            "completed": false
+                        }
+                        document.querySelector('#task').value = activeTask.description;
+                        console.log(activeTask)
+                    })
+                    
+                })
+            }
+            submitForm()    
+        })
+
+    </script>
+
+
+
+    <style>
+        li{
+            display: flex;
+            flex-direction: row;
+            justify-content: space-between;
+            align-content: space-around;
+            border-bottom: 1px solid;
+            max-width: 70%;
+        }
+       
+     
+
+    </style>
+</body>
+</html>
